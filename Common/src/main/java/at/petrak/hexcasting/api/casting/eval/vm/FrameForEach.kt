@@ -3,10 +3,14 @@ package at.petrak.hexcasting.api.casting.eval.vm
 import at.petrak.hexcasting.api.casting.SpellList
 import at.petrak.hexcasting.api.casting.eval.CastResult
 import at.petrak.hexcasting.api.casting.eval.ResolvedPatternType
+import at.petrak.hexcasting.api.casting.eval.sideeffects.OperatorSideEffect
 import at.petrak.hexcasting.api.casting.iota.Iota
 import at.petrak.hexcasting.api.casting.iota.IotaType
 import at.petrak.hexcasting.api.casting.iota.ListIota
+import at.petrak.hexcasting.api.casting.mishaps.Mishap
+import at.petrak.hexcasting.api.casting.mishaps.MishapForEachBelowWaterLevel
 import at.petrak.hexcasting.common.lib.hex.HexEvalSounds
+import com.mojang.serialization.Codec
 import com.mojang.serialization.MapCodec
 import com.mojang.serialization.codecs.RecordCodecBuilder
 import net.minecraft.network.RegistryFriendlyByteBuf
@@ -29,7 +33,8 @@ data class FrameForEach(
     val data: SpellList,
     val code: SpellList,
     val baseStack: List<Iota>?,
-    val acc: MutableList<Iota>
+    val acc: MutableList<Iota>,
+    val waterLevel: Int
 ) : ContinuationFrame {
 
     /** When halting, we add the stack state at halt to the stack accumulator, then return the original pre-Thoth stack, plus the accumulator. */
@@ -51,9 +56,29 @@ data class FrameForEach(
             // init stack to the VM stack...
             harness.image.stack.toList()
         } else {
-            // else save the stack to the accumulator and reuse the saved base stack.
-            acc.addAll(harness.image.stack)
-            baseStack
+            // else check if the stack is below the water level; throw if so.
+            if (harness.image.stack.size < waterLevel) {
+                return CastResult(
+                    ListIota(code),
+                    continuation,
+                    null,
+                    listOf(
+                        OperatorSideEffect.DoMishap(
+                            MishapForEachBelowWaterLevel(waterLevel, harness.image.stack.size, acc),
+                            Mishap.Context(
+                                null,
+                                null
+                            )
+                        )
+                    ),
+                    ResolvedPatternType.ERRORED,
+                    HexEvalSounds.MISHAP
+                )
+            }
+            // save the stack above the water level to the accumulator, and use the stack below it otherwise.
+            acc.addAll(harness.image.stack.drop(waterLevel))
+
+            harness.image.stack.take(waterLevel)
         }
 
         // If we still have data to process...
@@ -61,7 +86,7 @@ data class FrameForEach(
             // push the next datum to the top of the stack,
             val cont2 = continuation
                 // put the next Thoth object back on the stack for the next Thoth cycle,
-                .pushFrame(FrameForEach(data.cdr, code, stack, acc))
+                .pushFrame(FrameForEach(data.cdr, code, stack, acc, waterLevel))
                 // and prep the Thoth'd code block for evaluation.
                 .pushFrame(FrameEvaluate(code, true))
             Triple(data.car, harness.image.withUsedOp(), cont2)
@@ -94,9 +119,10 @@ data class FrameForEach(
                     SpellList.CODEC.fieldOf("data").forGetter { it.data },
                     SpellList.CODEC.fieldOf("code").forGetter { it.code },
                     IotaType.TYPED_CODEC.listOf().optionalFieldOf("base").forGetter { Optional.ofNullable(it.baseStack) },
-                    IotaType.TYPED_CODEC.listOf().fieldOf("accumulator").forGetter { it.acc }
-                ).apply(inst) { a, b, c, d ->
-                    FrameForEach(a, b, c.getOrNull(), d)
+                    IotaType.TYPED_CODEC.listOf().fieldOf("accumulator").forGetter { it.acc },
+                    Codec.INT.fieldOf("waterLevel").forGetter { it.waterLevel }
+                ).apply(inst) { a, b, c, d, e ->
+                    FrameForEach(a, b, c.getOrNull(), d, e)
                 }
             }
             val STREAM_CODEC = StreamCodec.composite(
@@ -105,9 +131,10 @@ data class FrameForEach(
                 ByteBufCodecs.optional(IotaType.TYPED_STREAM_CODEC
                     .apply(ByteBufCodecs.list())), { Optional.ofNullable(it.baseStack) },
                 IotaType.TYPED_STREAM_CODEC
-                    .apply(ByteBufCodecs.list()), FrameForEach::acc
-            ) { a, b, c, d ->
-                FrameForEach(a, b, c.getOrNull(), d)
+                    .apply(ByteBufCodecs.list()), FrameForEach::acc,
+                ByteBufCodecs.INT, FrameForEach::waterLevel
+            ) { a, b, c, d, e ->
+                FrameForEach(a, b, c.getOrNull(), d, e)
             }
 
 
