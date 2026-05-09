@@ -64,10 +64,13 @@ data class CastingImage(
     fun withResetEscape() = this.copy(parenCount = 0, parenthesized = listOf(), escapeNext = false)
 
     /**
-     * Returns this image's ravenmind in an Optional wrapper.
+     * Returns this image's ravenmind.
      */
-    fun ravenmind() : Optional<CompoundTag> {
-        return Optional.ofNullable(userData.getCompound(HexAPI.RAVENMIND_USERDATA))
+    fun ravenmind() : CompoundTag? {
+        val r = if (userData.contains(HexAPI.RAVENMIND_USERDATA)) {
+            userData.getCompound(HexAPI.RAVENMIND_USERDATA)
+        } else null
+        return r
     }
 
 

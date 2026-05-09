@@ -96,7 +96,7 @@ class CastingVM(var image: CastingImage, val env: CastingEnvironment) {
                 if (lastResolutionType.success) ResolvedPatternType.EVALUATED else ResolvedPatternType.ERRORED
         }
 
-        var ravenmind: CompoundTag? = image.ravenmind().getOrNull()
+        var ravenmind: CompoundTag? = image.ravenmind()
 
         if (ravenmind != null) {
             val test = IotaType.TYPED_CODEC.parse<Tag?>(NbtOps.INSTANCE, ravenmind).getOrThrow()

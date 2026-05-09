@@ -45,7 +45,7 @@ public class ItemStaff extends Item {
             var vm = IXplatAbstractions.INSTANCE.getStaffcastVM(serverPlayer, hand);
             var patterns = IXplatAbstractions.INSTANCE.getPatternsSavedInUi(serverPlayer);
 
-            CompoundTag ravenmind = vm.getImage().ravenmind().orElse(new CompoundTag());
+            CompoundTag ravenmind = vm.getImage().ravenmind();
 
 
             IXplatAbstractions.INSTANCE.sendPacketToPlayer(serverPlayer,

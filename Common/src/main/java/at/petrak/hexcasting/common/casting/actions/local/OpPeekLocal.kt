@@ -18,8 +18,8 @@ object OpPeekLocal : Action {
         val stack = image.stack.toMutableList()
         val ravenmind = image.ravenmind()
 
-        val rm = if (ravenmind.isPresent) {
-            IotaType.TYPED_CODEC.parse(NbtOps.INSTANCE, ravenmind.get()).orThrow
+        val rm = if (ravenmind != null) {
+            IotaType.TYPED_CODEC.parse(NbtOps.INSTANCE, ravenmind).orThrow
         } else {
             NullIota()
         }
